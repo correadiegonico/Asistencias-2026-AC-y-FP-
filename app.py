@@ -80,8 +80,7 @@ def extraer_texto_pdf(file_id):
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
         paginas = [page.extract_text() or "" for page in reader.pages]
-        # Normaliza espacios múltiples para facilitar coincidencias
-        return re.sub(r"\s+", " ", " ".join(paginas))
+        return " ".join(paginas)
     except Exception:
         return ""
 
@@ -108,8 +107,8 @@ with col_input:
         )
     else:
         valor_busqueda = st.text_input(
-            "Ingresar DNI del pasajero:",
-            placeholder="Ej: 35123456 o 35.123.456"
+            "Ingresar número de DNI:",
+            placeholder="Ej: 35123456"
         )
 
 if st.button("🔄 Actualizar lista de Drive"):
@@ -146,15 +145,14 @@ elif modo_busqueda == "DNI pax":
         st.info("Ingresá al menos 6 dígitos del DNI para buscar dentro de los PDFs.")
     else:
         patron_dni = rf"(?<!\d){re.escape(dni_limpio)}(?!\d)"
-        with st.spinner("Buscando el DNI dentro de los PDFs..."):
+        with st.spinner("Buscando el número de DNI dentro de los PDFs..."):
             for file in archivos_drive:
                 nombre = file.get("name", "")
                 if not nombre.lower().endswith(".pdf") and file.get("mimeType") != "application/pdf":
                     continue
                 texto_pdf = extraer_texto_pdf(file["id"])
-                # Quita puntos/espacios entre dígitos del texto para detectar 35.123.456 o 35123456
-                texto_sin_puntos = re.sub(r"(?<=\d)[.\s-]+(?=\d)", "", texto_pdf)
-                if re.search(patron_dni, texto_sin_puntos):
+                texto_normalizado = re.sub(r"(?<=\d)[.\s-]+(?=\d)", "", texto_pdf)
+                if re.search(patron_dni, texto_normalizado):
                     archivos_filtrados.append(file)
 
 if termino and not archivos_filtrados and (
