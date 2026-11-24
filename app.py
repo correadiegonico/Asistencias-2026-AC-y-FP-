@@ -4,7 +4,6 @@ import streamlit as st
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from pypdf import PdfReader
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(
@@ -72,48 +71,26 @@ def descargar_archivo_drive(file_id):
     fh.seek(0)
     return fh.read()
 
-@st.cache_data(ttl=600)
-def extraer_texto_pdf(file_id):
-    pdf_bytes = descargar_archivo_drive(file_id)
-    if not pdf_bytes:
-        return ""
-    try:
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-        paginas = [page.extract_text() or "" for page in reader.pages]
-        return " ".join(paginas)
-    except Exception:
-        return ""
-
 def solo_digitos(texto):
     return re.sub(r"\D", "", texto or "")
 
 # --- INTERFAZ EN PÁGINA PRINCIPAL ---
 st.title("🚌 Consulta y Descarga de Vouchers de Pasajeros")
 
-col_modo, col_input = st.columns([1.4, 2.6])
-
-with col_modo:
-    modo_busqueda = st.radio(
-        "Buscar por:",
-        ["Número de coche", "DNI pax"],
-        horizontal=True
-    )
+col_input, col_btn = st.columns([3.2, 1])
 
 with col_input:
-    if modo_busqueda == "Número de coche":
-        valor_busqueda = st.text_input(
-            "Ingresar N° de coche:",
-            placeholder="Ej: 16"
-        )
-    else:
-        valor_busqueda = st.text_input(
-            "Ingresar número de DNI:",
-            placeholder="Ej: 35123456"
-        )
+    valor_busqueda = st.text_input(
+        "Buscar por número de coche:",
+        placeholder="Ej: 16"
+    )
 
-if st.button("🔄 Actualizar lista de Drive"):
-    st.cache_data.clear()
-    st.rerun()
+with col_btn:
+    st.write("")
+    st.write("")
+    if st.button("🔄 Actualizar lista"):
+        st.cache_data.clear()
+        st.rerun()
 
 st.divider()
 st.subheader("📄 Resultados")
@@ -127,38 +104,19 @@ except Exception as e:
 archivos_filtrados = []
 termino = (valor_busqueda or "").strip()
 
-if modo_busqueda == "Número de coche":
-    if not termino:
-        st.info("Ingresá un número de coche para buscar vouchers.")
-    else:
-        num_buscado = solo_digitos(termino)
-        if num_buscado:
-            patron = rf"(?<!\d){re.escape(num_buscado)}(?!\d)"
-            for file in archivos_drive:
-                nombre = file.get("name", "")
-                if re.search(patron, nombre):
-                    archivos_filtrados.append(file)
+if not termino:
+    st.info("Ingresá un número de coche para buscar vouchers.")
+else:
+    num_buscado = solo_digitos(termino)
+    if num_buscado:
+        patron = rf"(?<!\d){re.escape(num_buscado)}(?!\d)"
+        for file in archivos_drive:
+            nombre = file.get("name", "")
+            if re.search(patron, nombre):
+                archivos_filtrados.append(file)
 
-elif modo_busqueda == "DNI pax":
-    dni_limpio = solo_digitos(termino)
-    if len(dni_limpio) < 6:
-        st.info("Ingresá al menos 6 dígitos del DNI para buscar dentro de los PDFs.")
-    else:
-        patron_dni = rf"(?<!\d){re.escape(dni_limpio)}(?!\d)"
-        with st.spinner("Buscando el número de DNI dentro de los PDFs..."):
-            for file in archivos_drive:
-                nombre = file.get("name", "")
-                if not nombre.lower().endswith(".pdf") and file.get("mimeType") != "application/pdf":
-                    continue
-                texto_pdf = extraer_texto_pdf(file["id"])
-                texto_normalizado = re.sub(r"(?<=\d)[.\s-]+(?=\d)", "", texto_pdf)
-                if re.search(patron_dni, texto_normalizado):
-                    archivos_filtrados.append(file)
-
-if termino and not archivos_filtrados and (
-    modo_busqueda == "Número de coche" or len(solo_digitos(termino)) >= 6
-):
-    st.warning("No se encontraron vouchers con ese criterio.")
+if termino and not archivos_filtrados:
+    st.warning("No se encontraron vouchers para ese número de coche.")
 elif archivos_filtrados:
     st.write(f"Se encontraron **{len(archivos_filtrados)}** archivo(s):")
 
